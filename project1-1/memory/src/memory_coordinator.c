@@ -20,7 +20,7 @@
 int is_exit = 0;  // DO NOT MODIFY THE VARIABLE
 int unused_mem_low = 100;
 int unused_mem_high = 300;
-int mem_alloc_unit = 50;
+int mem_alloc_unit = 100;
 int host_mem_low = 200;
 
 void MemoryScheduler(virConnectPtr conn, int interval);
@@ -169,9 +169,6 @@ void MemoryScheduler(virConnectPtr conn, int interval) {
       if (vm_status[i] == 0) {
         virDomainSetMemory(domains[i],
                            (balloon_mems[i] - mem_alloc_unit) * 1024);
-        // int ret = virDomainSetMemoryFlags(
-        //     domains[i], (balloon_mems[i] + mem_alloc_unit) * 1024,
-        //     VIR_DOMAIN_AFFECT_LIVE);
       } else if (vm_status[i] == 1) {
         int ret = virDomainSetMemory(domains[i],
                                      (balloon_mems[i] + mem_alloc_unit) * 1024);
