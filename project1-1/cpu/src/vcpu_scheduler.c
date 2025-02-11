@@ -165,6 +165,7 @@ void get_cpu_mapping(int mapping[], virDomainPtr *domains) {
         p_cpu -= 8;
       }
     }
+    free(cpu_info);
   }
 }
 
