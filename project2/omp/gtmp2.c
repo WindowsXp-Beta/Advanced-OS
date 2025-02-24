@@ -1,5 +1,6 @@
 #include <omp.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "gtmp.h"
 
@@ -8,12 +9,12 @@ mp_mcs_barrier barrier;
 void gtmp_init(int num_threads) {
   barrier.num_threads = num_threads;
   int ret = posix_memalign(&(barrier.nodes), 64,
-                           sizeof(mp_mcs_barrier) * num_threads);
+                           sizeof(mp_mcs_barrier_node) * num_threads);
 
   if (ret != 0) {
-    fprintf(stderr, "%s:%s Failed to alloc mcs_nodes for mp_mcs_barrier %d\n",
-            __FILE__, __LINE__);
-    exit(ret)
+    fprintf(stderr, "%s:%u Failed to alloc mcs_nodes for mp_mcs_barrier %d\n",
+            __FILE__, __LINE__, ret);
+    exit(ret);
   }
 
   for (int i = 0; i < num_threads; i++) {
@@ -29,7 +30,7 @@ void gtmp_init(int num_threads) {
       node->cn.array[k] = 1;
     }
     if (i != 0) {
-      node->parent_ptr = &(barrier.nodes[(i - 4) / 4].cn.array[(i - 4) % 4]);
+      node->parent_ptr = &(barrier.nodes[(i - 1) / 4].cn.array[(i - 1) % 4]);
     } else {
       node->parent_ptr = NULL;
     }

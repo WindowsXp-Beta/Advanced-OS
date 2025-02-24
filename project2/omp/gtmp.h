@@ -4,7 +4,7 @@
 
 typedef struct {
   volatile int8_t* parent_ptr;  // points to the CN array in the parent node
-  volatie int* wakeup_ptrs[2];
+  volatile int* wakeup_ptrs[2];
   int sense;
   volatile int parent_sense;
   union {
