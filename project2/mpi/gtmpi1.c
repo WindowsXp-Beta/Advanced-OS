@@ -1,3 +1,4 @@
+#include <math.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,18 +19,16 @@ void gtmpi_barrier() {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);  // is this called by every process?
 
   for (int round = 0; round < num_rounds; round++) {
-    int send_to = (rank + 1 << roumd) % num_process;
-    int recv_from = (rank - 1 << round + num_rounds) % num_process;
+    int send_to = (rank + (1 << round)) % num_process;
+    int recv_from = (rank - (1 << round) + num_process) % num_process;
 
     printf("Rank %d sending to %d and receiving from %d\n", rank, send_to,
            recv_from);
 
     MPI_Request request;
-    MPI_Isend("1", 1, MPI_CHAR, send_to, 1, MPI_COMM_WORLD, &request);
+    MPI_Isend(NULL, 0, MPI_INT, send_to, 1, MPI_COMM_WORLD, &request);
 
-    char recv_buf[1];
-    MPI_Recv(recv_buf, 1, MPI_CHAR, recv_from, MPI_ANY_TAG, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
+    MPI_Recv(NULL, 0, MPI_INT, recv_from, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 }
 
