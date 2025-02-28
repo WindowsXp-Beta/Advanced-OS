@@ -13,8 +13,7 @@ void gtmp_init(int num_threads) {
 
 void gtmp_barrier() {
   bool my_sense = !sense;
-  if (__sync_fetch_and_sub(&count, 1) ==
-      1) {  // last thread to reach this barrier
+  if (__sync_fetch_and_sub(&count, 1) == 1) {  // last thread to reach this barrier
     count = omp_get_num_threads();
     sense = my_sense;
   } else {  // wait for other threads
