@@ -5,16 +5,18 @@
 
 int count;
 bool sense;
+int num_threads;
 
-void gtmp_init(int num_threads) {
-  count = num_threads;
+void gtmp_init(int _num_threads) {
+  count = _num_threads;
+  num_threads = _num_threads;
   sense = false;
 }
 
 void gtmp_barrier() {
   bool my_sense = !sense;
   if (__sync_fetch_and_sub(&count, 1) == 1) {  // last thread to reach this barrier
-    count = omp_get_num_threads();
+    count = num_threads;
     sense = my_sense;
   } else {  // wait for other threads
     while (sense != my_sense);
