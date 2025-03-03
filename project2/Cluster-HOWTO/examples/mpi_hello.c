@@ -1,28 +1,31 @@
 #include <mpi.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+#include "gtmpi.h"
 
 int main(int argc, char** argv) {
-    // Initialize the MPI environment
-    MPI_Init(NULL, NULL);
+  int num_processes;
+  int num_rounds = 10000;
 
-    // Get the number of processes
-    int world_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  MPI_Init(&argc, &argv);
 
-    // Get the rank of the process
-    int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
 
-    // Get the name of the processor
-    char processor_name[MPI_MAX_PROCESSOR_NAME];
-    int name_len;
-    MPI_Get_processor_name(processor_name, &name_len);
+  gtmpi_init(num_processes);
 
-    // Print off a hello world message
-    printf("Hello world from processor %s, rank %d out of %d processors\n",
-           processor_name, world_rank, world_size);
+  double start_time = MPI_Wtime();
+  for (int k = 0; k < num_rounds; k++) {
+    gtmpi_barrier();
+  }
+  double end_time = MPI_Wtime();
+  printf("Rk %d: Time %f\n", (end_time - start_time) / num_rounds);
 
-    // Finalize the MPI environment.
-    MPI_Finalize();
-    return 0;
+  gtmpi_finalize();
+
+  MPI_Finalize();
+
+  return 0;
 }

@@ -5,14 +5,13 @@
 #SBATCH --mem-per-cpu=1G
 #SBATCH -t 5
 #SBATCH -q coc-ice
-#SBATCH -o mpi_hello.out
+#SBATCH -o mpi1_8.out
 
 echo "Started on `/bin/hostname`"
 
 
-cd ~/examples
-
 module load gcc/12.3.0 mvapich2/2.3.7-1
-mpicc -Wall mpi_hello.c -o mpi_hello
+
+mpicc -Wall mpi_hello.c ../../mpi/gtmpi1.c -o mpi_hello -I../../mpi
 
 srun mpi_hello

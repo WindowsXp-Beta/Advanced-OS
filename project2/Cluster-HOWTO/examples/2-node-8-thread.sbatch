@@ -10,11 +10,8 @@
 echo "Started on `/bin/hostname`"
 
 
-cd ~/examples
-
 module load gcc/12.3.0 mvapich2/2.3.7-1
-export OMP_NUM_THREADS=8
 
-mpicc -Wall -lm -fopenmp -lgomp combined_hello.c -o combined_hello
+mpicc -Wall -lm -fopenmp -lgomp combined_hello.c ../../combined/combined.c -o combined_hello -I../../combined
 
-srun combined_hello
+srun combined_hello 8
