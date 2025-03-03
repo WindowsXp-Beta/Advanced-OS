@@ -10,8 +10,8 @@
 int num_rounds;
 int num_processes;
 int num_threads;
-int count;
-bool sense;
+volatile int count;
+volatile bool sense;
 
 void combined_init(int _num_processes, int _num_threads) {
   num_rounds = ceil(log2(_num_processes));
@@ -35,8 +35,8 @@ void combined_barrier() {
       int send_to = (rank + (1 << round)) % num_processes;
       int recv_from = (rank - (1 << round) + num_processes) % num_processes;
 
-      printf("Rank %d sending to %d and receiving from %d\n", rank, send_to,
-             recv_from);
+      // printf("Rank %d sending to %d and receiving from %d\n", rank, send_to,
+      //        recv_from);
 
       MPI_Request request;
       MPI_Isend(NULL, 0, MPI_INT, send_to, 1, MPI_COMM_WORLD, &request);

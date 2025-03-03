@@ -3,8 +3,8 @@
 
 #include "gtmp.h"
 
-int count;
-bool sense;
+volatile int count;
+volatile bool sense;
 int num_threads;
 
 void gtmp_init(int _num_threads) {

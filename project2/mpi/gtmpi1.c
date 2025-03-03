@@ -22,8 +22,8 @@ void gtmpi_barrier() {
     int send_to = (rank + (1 << round)) % num_process;
     int recv_from = (rank - (1 << round) + num_process) % num_process;
 
-    printf("Rank %d sending to %d and receiving from %d\n", rank, send_to,
-           recv_from);
+    // printf("Rank %d sending to %d and receiving from %d\n", rank, send_to,
+    //        recv_from);
 
     MPI_Request request;
     MPI_Isend(NULL, 0, MPI_INT, send_to, 1, MPI_COMM_WORLD, &request);
