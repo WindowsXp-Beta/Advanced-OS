@@ -1,4 +1,4 @@
-MPICC = mpicc.mpich
+MPICC = mpicc
 CFLAGS = -g -Wall -std=gnu99 -I.
 LDLIBS = -lm
 

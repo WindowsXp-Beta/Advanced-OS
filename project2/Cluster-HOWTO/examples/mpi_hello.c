@@ -6,7 +6,7 @@
 
 int main(int argc, char** argv) {
   int num_processes;
-  int num_rounds = 10000;
+  int num_rounds = 100000;
 
   MPI_Init(&argc, &argv);
 
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     gtmpi_barrier();
   }
   double end_time = MPI_Wtime();
-  printf("Rk %d: Time %f\n", (end_time - start_time) / num_rounds);
+  printf("Rk %d: Time %f\n", rank, end_time - start_time);
 
   gtmpi_finalize();
 

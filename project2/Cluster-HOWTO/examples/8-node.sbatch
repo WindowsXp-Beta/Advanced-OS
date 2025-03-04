@@ -12,6 +12,6 @@ echo "Started on `/bin/hostname`"
 
 module load gcc/12.3.0 mvapich2/2.3.7-1
 
-mpicc -Wall mpi_hello.c ../../mpi/gtmpi1.c -o mpi_hello -I../../mpi
+mpicc -Wall mpi_hello.c ../../mpi/gtmpi1.c -o mpi_hello -I../../mpi -lm
 
 srun mpi_hello

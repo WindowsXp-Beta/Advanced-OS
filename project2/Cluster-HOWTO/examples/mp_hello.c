@@ -17,7 +17,7 @@
 #include "gtmp.h"
 
 int main(int argc, char** argv) {
-  int num_threads, num_iter = 10000;
+  int num_threads, num_iter = 1000000;
 
   if (argc < 2) {
     fprintf(stderr, "Usage: ./harness [NUM_THREADS]\n");
@@ -41,8 +41,7 @@ int main(int argc, char** argv) {
       gtmp_barrier();
     }
     double end_time = omp_get_wtime();
-    printf("Thread %d: Time %f\n", thread_id,
-           (end_time - start_time) / num_iter);
+    printf("Thread %d: Time %f\n", thread_id, end_time - start_time);
   }
 
   gtmp_finalize();

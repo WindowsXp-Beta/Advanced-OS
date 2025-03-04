@@ -5,7 +5,7 @@
 #SBATCH --mem-per-cpu=1G
 #SBATCH -t 5
 #SBATCH -q coc-ice
-#SBATCH -o combined_hello.out
+#SBATCH -o combined_hello_2_8.out
 
 echo "Started on `/bin/hostname`"
 

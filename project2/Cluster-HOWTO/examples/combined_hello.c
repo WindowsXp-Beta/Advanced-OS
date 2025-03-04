@@ -6,7 +6,7 @@
 #include "combined.h"
 
 int main(int argc, char** argv) {
-  int num_iter = 10;
+  int num_iter = 100000;
   int num_processes, num_threads;
 
   MPI_Init(&argc, &argv);
@@ -42,10 +42,10 @@ int main(int argc, char** argv) {
     for (i = 0; i < num_iter; i++) {
       combined_barrier();
     }
-    printf("rank %d thread %d: finished\n", rank, omp_get_thread_num());
+    // printf("rank %d thread %d: finished\n", rank, omp_get_thread_num());
   }
   double end_time = MPI_Wtime();
-  printf("Rk %d: Time %f\n", (end_time - start_time) / num_iter);
+  printf("Rk %d: Time %f\n", rank, end_time - start_time);
 
   combined_finalize();
 
