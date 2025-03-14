@@ -19,6 +19,14 @@ using vendor::BidReply;
 
 class StoreService final : public Store::Service { 
 	public:
+
+		// constructor
+		StoreService(const std::string vendor_addresses_file, const int num_max_threads) {
+			max_threads = num_max_threads;
+			parse_vendor_addresses(vendor_addresses_file);
+		}
+
+
 		Status getProducts(ServerContext* context, const ProductQuery* query, ProductReply* reply) override {
 			std::string product_name = query->product_name();
 		
@@ -48,6 +56,23 @@ class StoreService final : public Store::Service {
 
   	private:
 		std::unique_ptr<Vendor::Stub> stub_;
+		int max_threads;
+
+		parse_vendor_addresses(const std::string vendor_addresses_file) {
+			std::ifstream myfile(vendor_addresses_file);
+			if (myfile.is_open()) {
+				std::string ip_addr;
+				while (getline(myfile, ip_addr)) {
+					std::shared_ptr<Channel> channel = grpc::CreateChannel(ip_addr, grpc::InsecureChannelCredentials());
+					stub_ = Vendor::NewStub(channel);
+				}
+				myfile.close();
+			}
+			else {
+				std::cerr << "Failed to open file " << vendor_addresses_file << std::endl;
+				exit(EXIT_FAILURE);
+			}
+		}
 };
 
 void run_store_server(const std::string vendor_addresses_file, const std::string server_address, const int num_max_threads) {
