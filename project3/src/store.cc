@@ -1,6 +1,7 @@
 #include "threadpool.h"
 
 #include <iostream>
+#include <fstream>
 
 #include <grpc++/grpc++.h>
 
@@ -17,7 +18,7 @@ using store::ProductInfo;
 using vendor::BidQuery;
 using vendor::BidReply;
 
-class StoreService final : public Store::Service { 
+class StoreService final : public store::Store::Service { 
 	public:
 
 		// constructor
@@ -26,45 +27,54 @@ class StoreService final : public Store::Service {
 			parse_vendor_addresses(vendor_addresses_file);
 		}
 
-
 		Status getProducts(ServerContext* context, const ProductQuery* query, ProductReply* reply) override {
 			std::string product_name = query->product_name();
 		
 			std::cout << "Received request for product: " << product_name << std::endl;
 		
-			BidQuery bid_query;
-			bid_query.set_product_name(product_name);
-		
-			BidReply bid_reply;
-		
-			Status status = stub_->getProductBid(&context, bid_query, &bid_reply);
-		
-			if (!status.ok()) {
-				std::cout << status.error_code() << ": " << status.error_message()
-						<< std::endl;
-				return status;
+			// iterate over all vendors and get the bid for the product
+			for (int i = 0; i < stubs_.size(); i++) {
+				// create a new thread for each vendor
+				//std::thread t(&StoreService::getProductBid, this, context, product_name, reply);
+				//t.join();
+				//ThreadPool pool(max_threads);
+				//pool.enqueue(&StoreService::getProductBid, this, context, product_name, reply);
+
+				BidQuery bid_query;
+				bid_query.set_product_name(product_name);
+			
+				BidReply bid_reply;
+				grpc::ClientContext client_context;			
+				Status status = stubs_[i]->getProductBid(&client_context, bid_query, &bid_reply);
+			
+				if (!status.ok()) {
+					std::cout << status.error_code() << ": " << status.error_message()
+							<< std::endl;
+					return status;
+				}
+			
+				std::cout << "Received bid from vendor: " << bid_reply.vendor_id() << " with price: " << bid_reply.price() << std::endl;
+			
+				ProductInfo* product_info = reply->add_products();
+				product_info->set_price(bid_reply.price());
+				product_info->set_vendor_id(bid_reply.vendor_id());
 			}
-		
-			std::cout << "Received bid from vendor: " << bid_reply.vendor_id() << " with price: " << bid_reply.price() << std::endl;
-		
-			ProductInfo* product_info = reply->add_products();
-			product_info->set_price(bid_reply.price());
-			product_info->set_vendor_id(bid_reply.vendor_id());
-		
 			return Status::OK;
 		}
 
   	private:
-		std::unique_ptr<Vendor::Stub> stub_;
-		int max_threads;
+	    int max_threads;	
+		std::vector<std::unique_ptr<vendor::Vendor::Stub>> stubs_;
+		std::vector<std::string> ip_addresses;
 
-		parse_vendor_addresses(const std::string vendor_addresses_file) {
+		void parse_vendor_addresses(const std::string vendor_addresses_file) {
 			std::ifstream myfile(vendor_addresses_file);
 			if (myfile.is_open()) {
 				std::string ip_addr;
 				while (getline(myfile, ip_addr)) {
-					std::shared_ptr<Channel> channel = grpc::CreateChannel(ip_addr, grpc::InsecureChannelCredentials());
-					stub_ = Vendor::NewStub(channel);
+					ip_addresses.push_back(ip_addr);
+					std::unique_ptr<vendor::Vendor::Stub> new_stub = vendor::Vendor::NewStub(grpc::CreateChannel(ip_addr, grpc::InsecureChannelCredentials()));
+					stubs_.push_back(std::move(new_stub));
 				}
 				myfile.close();
 			}
@@ -76,7 +86,7 @@ class StoreService final : public Store::Service {
 };
 
 void run_store_server(const std::string vendor_addresses_file, const std::string server_address, const int num_max_threads) {
-	StoreService(vendor_addresses_file, max_threads);
+	StoreService service(vendor_addresses_file, num_max_threads);
 	
 	ServerBuilder builder;
 	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
