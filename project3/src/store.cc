@@ -1,125 +1,235 @@
-#include "threadpool.h"
+#include <grpc/support/log.h>
+#include <grpcpp/grpcpp.h>
 
-#include <iostream>
 #include <fstream>
-
-#include <grpc++/grpc++.h>
+#include <iostream>
+#include <utility>
+#include <vector>
 
 #include "store.grpc.pb.h"
+#include "threadpool.h"
 #include "vendor.grpc.pb.h"
+#include "vendor_client.h"
 
-using grpc::Server;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::Status;
+using namespace std;
+
+using store::ProductInfo;
 using store::ProductQuery;
 using store::ProductReply;
-using store::ProductInfo;
+using store::Store;
+
+using grpc::Server;
+using grpc::ServerAsyncResponseWriter;
+using grpc::ServerBuilder;
+using grpc::ServerCompletionQueue;
+using grpc::ServerContext;
+using grpc::Status;
+
+using grpc::Channel;
+using grpc::ClientAsyncResponseReader;
+using grpc::ClientContext;
+using grpc::CompletionQueue;
+using grpc::Status;
+
 using vendor::BidQuery;
 using vendor::BidReply;
+using vendor::Vendor;
 
-class StoreService final : public store::Store::Service { 
-	public:
+Threadpool* threadpool;
+vector<string> vendor_ips;
 
-		// constructor
-		StoreService(const std::string vendor_addresses_file, const int num_max_threads) {
-			max_threads = num_max_threads;
-			parse_vendor_addresses(vendor_addresses_file);
-		}
+class ServerImpl final {
+ public:
+  ~ServerImpl() {
+    server_->Shutdown();
+    // Always shutdown the completion queue after the server.
+    cq_->Shutdown();
+  }
 
-		Status getProducts(ServerContext* context, const ProductQuery* query, ProductReply* reply) override {
-			std::string product_name = query->product_name();
-		
-			std::cout << "Received request for product: " << product_name << std::endl;
-		
-			// iterate over all vendors and get the bid for the product
-			for (int i = 0; i < stubs_.size(); i++) {
-				// create a new thread for each vendor
-				//std::thread t(&StoreService::getProductBid, this, context, product_name, reply);
-				//t.join();
-				//ThreadPool pool(max_threads);
-				//pool.enqueue(&StoreService::getProductBid, this, context, product_name, reply);
+  ServerImpl() {}
 
-				BidQuery bid_query;
-				bid_query.set_product_name(product_name);
-			
-				BidReply bid_reply;
-				grpc::ClientContext client_context;			
-				Status status = stubs_[i]->getProductBid(&client_context, bid_query, &bid_reply);
-			
-				if (!status.ok()) {
-					std::cout << status.error_code() << ": " << status.error_message()
-							<< std::endl;
-					return status;
-				}
-			
-				std::cout << "Received bid from vendor: " << bid_reply.vendor_id() << " with price: " << bid_reply.price() << std::endl;
-			
-				ProductInfo* product_info = reply->add_products();
-				product_info->set_price(bid_reply.price());
-				product_info->set_vendor_id(bid_reply.vendor_id());
-			}
-			return Status::OK;
-		}
+  // There is no shutdown handling in this code.
+  void Run(char* ip) {
+    string server_address(ip);
 
-  	private:
-	    int max_threads;	
-		std::vector<std::unique_ptr<vendor::Vendor::Stub>> stubs_;
-		std::vector<std::string> ip_addresses;
+    ServerBuilder builder;
+    // Listen on the given address without any authentication mechanism.
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    // Register "service_" as the instance through which we'll communicate with
+    // clients. In this case it corresponds to an *asynchronous* service.
+    builder.RegisterService(&service_);
+    // Get hold of the completion queue used for the asynchronous communication
+    // with the gRPC runtime.
+    cq_ = builder.AddCompletionQueue();
+    // Finally assemble the server.
+    server_ = builder.BuildAndStart();
+    cout << "Server listening on " << server_address << endl;
 
-		void parse_vendor_addresses(const std::string vendor_addresses_file) {
-			std::ifstream myfile(vendor_addresses_file);
-			if (myfile.is_open()) {
-				std::string ip_addr;
-				while (getline(myfile, ip_addr)) {
-					ip_addresses.push_back(ip_addr);
-					std::unique_ptr<vendor::Vendor::Stub> new_stub = vendor::Vendor::NewStub(grpc::CreateChannel(ip_addr, grpc::InsecureChannelCredentials()));
-					stubs_.push_back(std::move(new_stub));
-				}
-				myfile.close();
-			}
-			else {
-				std::cerr << "Failed to open file " << vendor_addresses_file << std::endl;
-				exit(EXIT_FAILURE);
-			}
-		}
+    // Proceed to the server's main loop.
+    HandleRpcs();
+  }
+
+ private:
+  unique_ptr<ServerCompletionQueue> cq_;
+  Store::AsyncService service_;
+  unique_ptr<Server> server_;
+
+  // Class encompasing the state and logic needed to serve a request.
+  class CallData {
+   public:
+    // Take in the "service" instance (in this case representing an asynchronous
+    // server) and the completion queue "cq" used for asynchronous communication
+    // with the gRPC runtime.
+    CallData(Store::AsyncService* service, ServerCompletionQueue* cq)
+        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
+      // Invoke the serving logic right away.
+      Proceed();
+    }
+
+    void Proceed() {
+      if (status_ == CREATE) {
+        // Make this instance progress to the PROCESS state.
+        status_ = PROCESS;
+
+        // As part of the initial CREATE state, we *request* that the system
+        // start processing SayHello requests. In this request, "this" acts are
+        // the tag uniquely identifying the request (so that different CallData
+        // instances can serve different requests concurrently), in this case
+        // the memory address of this CallData instance.
+        service_->RequestgetProducts(&ctx_, &request_, &responder_, cq_, cq_,
+                                     this);
+      } else if (status_ == PROCESS) {
+        threadpool->add_job([this]() {
+#ifdef DEBUG
+          cout << "Proceed start" << endl;
+#endif
+
+          // Spawn a new CallData instance to serve new clients while we process
+          // the one for this CallData. The instance will deallocate itself as
+          // part of its FINISH state.
+          new CallData(service_, cq_);
+
+#ifdef DEBUG
+          cout << "Proceed after calldata" << endl;
+#endif
+
+          string product_name = request_.product_name();
+
+          VendorClient client(vendor_ips);
+          vector<pair<double, string>> response =
+              client.getProductBid(product_name);
+
+          for (int i = 0; i < response.size(); i++) {
+            ProductInfo* product = reply_.add_products();
+            product->set_price(response[i].first);
+            product->set_vendor_id(response[i].second);
+          }
+
+// And we are done! Let the gRPC runtime know we've finished, using
+// the memory address of this instance as the uniquely identifying tag
+// for the event.
+#ifdef DEBUG
+          cout << "Proceed end\n" << endl;
+#endif
+          status_ = FINISH;
+          responder_.Finish(reply_, Status::OK, this);
+        });
+      } else {
+        GPR_ASSERT(status_ == FINISH);
+        // Once in the FINISH state, deallocate ourselves (CallData).
+        delete this;
+      }
+    }
+
+   private:
+    // The means of communication with the gRPC runtime for an asynchronous
+    // server.
+    Store::AsyncService* service_;
+    // The producer-consumer queue where for asynchronous server notifications.
+    ServerCompletionQueue* cq_;
+    // Context for the rpc, allowing to tweak aspects of it such as the use
+    // of compression, authentication, as well as to send metadata back to the
+    // client.
+    ServerContext ctx_;
+
+    // What we get from the client.
+    ProductQuery request_;
+    // What we send back to the client.
+    ProductReply reply_;
+
+    // The means to get back to the client.
+    ServerAsyncResponseWriter<ProductReply> responder_;
+
+    // Let's implement a tiny state machine with the following states.
+    enum CallStatus { CREATE, PROCESS, FINISH };
+    CallStatus status_;  // The current serving state.
+  };
+
+  // This can be run in multiple threads if needed.
+  void HandleRpcs() {
+    // Spawn a new CallData instance to serve new clients.
+    new CallData(&service_, cq_.get());
+    void* tag;  // uniquely identifies a request.
+    bool ok;
+    while (true) {
+#ifdef DEBUG
+      cout << "HandleRpcs start" << endl;
+#endif
+      // Block waiting to read the next event from the completion queue. The
+      // event is uniquely identified by its tag, which in this case is the
+      // memory address of a CallData instance.
+      // The return value of Next should always be checked. This return value
+      // tells us whether there is any kind of event or cq_ is shutting down.
+      GPR_ASSERT(cq_->Next(&tag, &ok));
+
+#ifdef DEBUG
+      cout << "HandleRpcs received" << endl;
+#endif
+
+      GPR_ASSERT(ok);
+#ifdef DEBUG
+      cout << "HandleRpcs ok" << endl;
+#endif
+
+      static_cast<CallData*>(tag)->Proceed();
+
+#ifdef DEBUG
+      cout << "HandleRpcs done" << endl;
+#endif
+    }
+  }
 };
 
-void run_store_server(const std::string vendor_addresses_file, const std::string server_address, const int num_max_threads) {
-	StoreService service(vendor_addresses_file, num_max_threads);
-	
-	ServerBuilder builder;
-	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-	builder.RegisterService(&service);
-	
-	std::unique_ptr<Server> server(builder.BuildAndStart());
-	std::cout << "Server listening on " << server_address << std::endl;
-	
-	server->Wait();
+void get_vendor_ips(char* filename) {
+  string line;
+  ifstream myfile(filename);
+  if (myfile.is_open()) {
+    while (getline(myfile, line)) {
+      cout << "reading vendor ip " << line << endl;
+      vendor_ips.push_back(line);
+    }
+    myfile.close();
+  } else {
+    cout << "Unable to open file";
+  }
 }
 
 int main(int argc, char** argv) {
-	// Your server should be able to accept `command line input` of 
-	// the vendor addresses file,  
-	// `address` on which it is going to expose its service 
-	// and `maximum number of threads` its threadpool should have.
-	int num_max_threads;
-	std::string server_address;
-	std::string vendor_addresses_file;
-	if (argc == 4) {
-		vendor_addresses_file = std::string(argv[1]);
-		server_address = std::string(argv[2]);
-		num_max_threads = std::min(1, atoi(argv[3]));
-	}
-	else {
-		std::cerr << "Correct usage: ./store <filepath for vendor addresses> \
-               <ip address:port to listen on for clients> \
-               <maximum number of threads in threadpool>" << std::endl;
-		return EXIT_FAILURE;
-	}
+  if (argc != 4) {
+    cout << "Incorrect usage. Expected is ./store <vendor_file_path>"
+            " <IP Address:Port of store server>"
+            " Maximum number of threads in threadpool\n";
+    exit(0);
+  }
+  cout << "Received file path: " << argv[1] << "\n";
+  cout << "Received IP:Port : " << argv[2] << "\n";
+  cout << "Received max threads: " << argv[3] << "\n";
 
-	run_store_server(vendor_addresses_file, server_address, num_max_threads);
+  threadpool = new Threadpool(atoi(argv[3]));
+  get_vendor_ips(argv[1]);
 
-	return EXIT_SUCCESS;
+  ServerImpl server;
+  server.Run(argv[2]);
+
+  return EXIT_SUCCESS;
 }
-

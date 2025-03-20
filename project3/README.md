@@ -2,12 +2,12 @@
 
   - In this project, you are going to implement major chunks of a simple distributed service using [grpc](http://www.grpc.io).
   - Learnings from this project will also help you in the next project as you will become familiar with grpc and multithreading with threadpool.
-  
+
 ### Overview
   - You are going to build a store (You can think of Amazon Store!), which receives requests from different users, querying the prices offered by the different registered vendors.
   - Your store will be provided with a file of <ip address:port> of vendor servers. On each product query, your store is supposed to request all of these vendor servers for their bid on the queried product.
   - Once your store has responses from all the vendors, it is supposed to collate the (bid, vendor_id) from the vendors and send it back to the requesting client.
-  
+
 ### Learning outcomes
   - Synchronous and Asynchronous RPC packages
   - Building a multi-threaded store in a distributed service
@@ -80,7 +80,7 @@ add_dependencies(run_tests p3protolib)
     - The thread will collate the results
     - The thread will reply to the store client with the results of the call
     - Having completed the work, the thread will return to the thread pool
-4. Do you have your user client request reaching to the vendors now? And can you see the bids from the different vendors at your user client end? Congratulations you almost got it! Now use the test harness to test if your server can serve multiple clients concurrently and make sure that your thread handling is correct. 
+4. Do you have your user client request reaching to the vendors now? And can you see the bids from the different vendors at your user client end? Congratulations you almost got it! Now use the test harness to test if your server can serve multiple clients concurrently and make sure that your thread handling is correct.
 
 ## Keep In Mind
 1. Your Server has to handle
@@ -95,13 +95,14 @@ add_dependencies(run_tests p3protolib)
                <ip address:port to listen on for clients> \
                <maximum number of threads in threadpool>
 5. Remember to add references to all the resources you have used while working on the project.
- 
+
 
 ## Given to You
   1. run_tests.cc - This will simulate real world users sending concurrent product queries. This will be released soon to you.
   2. client.cc - This will be providing ability to connect to the store as a user.
   3. vendor.cc - This wil act as the server providing bids for different products. Multiple instances of it will be run listening on different ip address and port.
   4. `Two .proto files`  
+
     - store.proto - Comm. protocol between user(client) and store(server)  
     - vendor.proto -Comm. protocol between store(client) and vendor(server)  
 
